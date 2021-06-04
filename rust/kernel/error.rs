@@ -62,21 +62,16 @@ impl Error {
 
     /// Creates an [`Error`] from a kernel error code.
     ///
-    /// It is a bug to pass an out-of-range `errno`. `EINVAL` would
+    /// It is a bug to pass an out-of-range `errno`. Err(`EINVAL`) would
     /// be returned in such a case.
-    pub(crate) fn from_kernel_errno(errno: c_types::c_int) -> Error {
+    pub(crate) fn from_kernel_errno(errno: c_types::c_int) -> Result<Error> {
         if errno < -(bindings::MAX_ERRNO as i32) || errno >= 0 {
-            // TODO: make it a `WARN_ONCE` once available.
-            crate::pr_warn!(
-                "attempted to create `Error` with out of range `errno`: {}",
-                errno
-            );
-            return Error::EINVAL;
+            return Err(Error::EINVAL);
         }
 
         // INVARIANT: the check above ensures the type invariant
         // will hold.
-        Error(errno)
+        Ok(Error(errno))
     }
 
     /// Creates an [`Error`] from a kernel error code.
