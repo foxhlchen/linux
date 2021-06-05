@@ -9,7 +9,7 @@ use crate::{bindings, c_types};
 use alloc::{alloc::AllocError, collections::TryReserveError};
 use core::convert::From;
 use core::fmt;
-use core::num::TryFromIntError;
+use core::num::{NonZeroI32, TryFromIntError};
 use core::str::{self, Utf8Error};
 
 /// Generic integer kernel error.
@@ -17,48 +17,64 @@ use core::str::{self, Utf8Error};
 /// The kernel defines a set of integer generic error codes based on C and
 /// POSIX ones. These codes may have a more specific meaning in some contexts.
 ///
+/// We use [`NonZeroI32`] as the inner type because `Result<(), Error>` can fit
+/// in 32-bit memory, and it takes one register (rather than 2 for [`i16`] or
+/// [`i32`]) for returning or argument passing which is fast in many
+/// architectures.
+///
 /// # Invariants
 ///
 /// The value is a valid `errno` (i.e. `>= -MAX_ERRNO && < 0`).
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub struct Error(c_types::c_int);
+pub struct Error(NonZeroI32);
+
+/// Creates [`Error`] from kernel const.
+///
+/// Do not use this function outside of [`Error`] `const` initializations.
+const fn from_kernel_const(errno: u32) -> Error {
+    let value = -(errno as i32);
+    assert!(value >= -(bindings::MAX_ERRNO as i32) && value < 0);
+
+    // SAFETY: We have checked above that `value` is within the right range.
+    Error(unsafe { NonZeroI32::new_unchecked(value) })
+}
 
 impl Error {
     /// Invalid argument.
-    pub const EINVAL: Self = Error(-(bindings::EINVAL as i32));
+    pub const EINVAL: Self = from_kernel_const(bindings::EINVAL);
 
     /// Out of memory.
-    pub const ENOMEM: Self = Error(-(bindings::ENOMEM as i32));
+    pub const ENOMEM: Self = from_kernel_const(bindings::ENOMEM);
 
     /// Bad address.
-    pub const EFAULT: Self = Error(-(bindings::EFAULT as i32));
+    pub const EFAULT: Self = from_kernel_const(bindings::EFAULT);
 
     /// Illegal seek.
-    pub const ESPIPE: Self = Error(-(bindings::ESPIPE as i32));
+    pub const ESPIPE: Self = from_kernel_const(bindings::ESPIPE);
 
     /// Try again.
-    pub const EAGAIN: Self = Error(-(bindings::EAGAIN as i32));
+    pub const EAGAIN: Self = from_kernel_const(bindings::EAGAIN);
 
     /// Device or resource busy.
-    pub const EBUSY: Self = Error(-(bindings::EBUSY as i32));
+    pub const EBUSY: Self = from_kernel_const(bindings::EBUSY);
 
     /// Restart the system call.
-    pub const ERESTARTSYS: Self = Error(-(bindings::ERESTARTSYS as i32));
+    pub const ERESTARTSYS: Self = from_kernel_const(bindings::ERESTARTSYS);
 
     /// Operation not permitted.
-    pub const EPERM: Self = Error(-(bindings::EPERM as i32));
+    pub const EPERM: Self = from_kernel_const(bindings::EPERM);
 
     /// No such process.
-    pub const ESRCH: Self = Error(-(bindings::ESRCH as i32));
+    pub const ESRCH: Self = from_kernel_const(bindings::ESRCH);
 
     /// No such file or directory.
-    pub const ENOENT: Self = Error(-(bindings::ENOENT as i32));
+    pub const ENOENT: Self = from_kernel_const(bindings::ENOENT);
 
     /// Interrupted system call.
-    pub const EINTR: Self = Error(-(bindings::EINTR as i32));
+    pub const EINTR: Self = from_kernel_const(bindings::EINTR);
 
     /// Bad file number.
-    pub const EBADF: Self = Error(-(bindings::EBADF as i32));
+    pub const EBADF: Self = from_kernel_const(bindings::EBADF);
 
     /// Creates an [`Error`] from a kernel error code.
     ///
@@ -76,7 +92,9 @@ impl Error {
 
         // INVARIANT: the check above ensures the type invariant
         // will hold.
-        Error(errno)
+        //
+        // SAFETY: the check above guarantees `errno` is within range.
+        unsafe { Error::from_kernel_errno_unchecked(errno) }
     }
 
     /// Creates an [`Error`] from a kernel error code.
@@ -87,12 +105,14 @@ impl Error {
     pub(crate) unsafe fn from_kernel_errno_unchecked(errno: c_types::c_int) -> Error {
         // INVARIANT: the contract ensures the type invariant
         // will hold.
-        Error(errno)
+        //
+        // SAFETY: the contract guarantees `errno` is non-zero.
+        Error(unsafe { NonZeroI32::new_unchecked(errno) })
     }
 
     /// Returns the kernel error code.
     pub fn to_kernel_errno(self) -> c_types::c_int {
-        self.0
+        self.0.get()
     }
 }
 
@@ -102,11 +122,14 @@ impl fmt::Debug for Error {
             fn rust_helper_errname(err: c_types::c_int) -> *const c_types::c_char;
         }
         // SAFETY: FFI call.
-        let name = unsafe { rust_helper_errname(-self.0) };
+        let name = unsafe { rust_helper_errname(-self.to_kernel_errno()) };
 
         if name.is_null() {
             // Print out number if no name can be found.
-            return f.debug_tuple("Error").field(&-self.0).finish();
+            return f
+                .debug_tuple("Error")
+                .field(&-self.to_kernel_errno())
+                .finish();
         }
 
         // SAFETY: `'static` string from C, and is not NULL.
