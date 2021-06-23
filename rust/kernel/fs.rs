@@ -3,11 +3,12 @@
 //! File System Interfaces.
 
 use crate::bindings::{
-    dentry, file_system_type, inode, mount_bdev, mount_nodev, mount_single, super_block,
+    dentry, file_system_type, inode, mount_bdev, mount_nodev, mount_single, super_block, register_filesystem,
 };
 use crate::str::*;
-use crate::{c_types, error::Error, Result};
+use crate::{c_types, error::Error, Result, ThisModule};
 use core::ptr;
+use alloc::boxed::Box;
 
 unsafe extern "C" fn mount_callback<T: FileSystem>(
     fs_type: *mut file_system_type,
@@ -39,6 +40,7 @@ unsafe extern "C" fn mount_callback<T: FileSystem>(
     };
 
     if let Err(e) = rt {
+        //TODO wrap ETR_PTR
         return e.to_kernel_errno() as *mut dentry;
     }
 
@@ -50,7 +52,28 @@ unsafe extern "C" fn fill_super_callback<T: FileSystem>(
     data: *mut c_types::c_void,
     silent: c_types::c_int,
 ) -> c_types::c_int {
+    let r_sb_rs = SuperBlock::from_c_super_block(sb);
+    if let Err(e) = r_sb_rs {
+        return e.to_kernel_errno();
+    }
+
+    let r_sb = r_sb_rs.unwrap();
+    let r_data = unsafe { CStr::from_char_ptr(data as *const c_types::c_char) };
+
+    let rs = T::fill_super(&r_sb, r_data, silent as i32);
+    if let Err(e) = rs {
+        return e.to_kernel_errno();
+    }
+
     0
+}
+
+unsafe extern "C" fn kill_sb_callback<T: FileSystem>(sb: *mut super_block) {
+    let r_sb_rs = SuperBlock::from_c_super_block(sb);
+
+    if let Ok(r_sb) = r_sb_rs {
+        T::kill_sb(&r_sb);
+    }
 }
 
 pub struct Dentry {
@@ -176,8 +199,26 @@ pub trait FileSystem {
         Err(Error::EINVAL)
     }
 
-    fn fill_super(fs_type: &FSType, sb: &SuperBlock, data: &CStr) -> Result<()> {
+    fn fill_super(sb: &SuperBlock, data: &CStr, silent: i32) -> Result<()> {
         Err(Error::EINVAL)
     }
-}
 
+    fn kill_sb(sb: &SuperBlock) {
+
+    }
+
+    fn register_self(name: &'static CStr, owner: ThisModule) -> Result<()> where Self: Sized {
+        let mut c_fs_type = Box::new(file_system_type::default());
+        c_fs_type.mount = Some(mount_callback::<Self>);
+        c_fs_type.kill_sb = Some(kill_sb_callback::<Self>);
+        c_fs_type.owner = owner.0;
+        c_fs_type.name = name.as_char_ptr();
+
+        let err = unsafe { register_filesystem(c_fs_type.as_mut() as *mut _) };
+        if err != 0 {
+            return Err(Error::from_kernel_errno(err));
+        }
+
+        Ok(())
+    }
+}
