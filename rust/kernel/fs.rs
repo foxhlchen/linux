@@ -2,14 +2,16 @@
 
 //! File System Interfaces.
 
+use super::file_operations::{FileOpenAdapter, FileOpener, FileOperationsVtable};
 use crate::bindings::{
-    dentry, file_system_type, inode, mount_bdev, mount_nodev, mount_single, super_block, register_filesystem,
-    unregister_filesystem
+    dentry, file_operations, file_system_type, inode, mount_bdev, mount_nodev, mount_single,
+    register_filesystem, super_block, unregister_filesystem,
 };
 use crate::str::*;
-use crate::{c_types, error::Error, Result, ThisModule, c_str};
-use core::ptr;
+use crate::{c_str, c_types, error::Error, Result, ThisModule};
 use alloc::boxed::Box;
+use alloc::vec::Vec;
+use core::ptr;
 
 unsafe extern "C" fn mount_callback<T: FileSystem>(
     fs_type: *mut file_system_type,
@@ -23,9 +25,9 @@ unsafe extern "C" fn mount_callback<T: FileSystem>(
     } else {
         unsafe { CStr::from_char_ptr(dev_name) }
     };
-    let r_data = if data.is_null() { 
+    let r_data = if data.is_null() {
         c_str!("")
-    } else { 
+    } else {
         unsafe { CStr::from_char_ptr(data as *const c_types::c_char) }
     };
 
@@ -66,14 +68,14 @@ unsafe extern "C" fn fill_super_callback<T: FileSystem>(
         return e.to_kernel_errno();
     }
 
-    let r_sb = r_sb_rs.unwrap();
-    let r_data = if data.is_null() { 
+    let mut r_sb = r_sb_rs.unwrap();
+    let r_data = if data.is_null() {
         c_str!("")
-    } else { 
+    } else {
         unsafe { CStr::from_char_ptr(data as *const c_types::c_char) }
     };
 
-    let rs = T::fill_super(&r_sb, r_data, silent as i32);
+    let rs = T::fill_super(&mut r_sb, r_data, silent as i32);
     if let Err(e) = rs {
         return e.to_kernel_errno();
     }
@@ -166,6 +168,10 @@ impl SuperBlock {
 
         Ok(sb)
     }
+
+    pub fn to_c_super_block(&mut self) -> *mut super_block {
+        self.c_sb
+    }
 }
 
 pub struct FSType {
@@ -205,7 +211,64 @@ pub enum MountType {
     Single,
 }
 
-pub type FSHandle = Box::<file_system_type>;
+// export tree_descr
+pub use crate::bindings::tree_descr;
+
+pub fn build_fops<A: FileOpenAdapter, T: FileOpener<A::Arg>>() -> &'static file_operations {
+    return unsafe { FileOperationsVtable::<A, T>::build() };
+}
+
+#[macro_export]
+macro_rules! treedescr {
+    (
+        $($name:literal,$ops:ident,$mode:expr;)+
+    ) => {
+        {
+            let mut v = Vec::<tree_descr>::new();
+            $(
+                let mut tdesc = tree_descr::default();
+                tdesc.name = c_str!($name).as_char_ptr();
+                tdesc.ops = build_fops::<$ops, $ops>();
+                tdesc.mode = $mode;
+
+                v.push(tdesc);
+            )*
+
+            v
+        }
+    };
+    () => {
+        {
+            let mut v = Vec::<tree_descr>::new();
+
+            let mut tdesc = tree_descr::default();
+            tdesc.name = c_str!("").as_char_ptr();
+
+            v.push(tdesc)
+            v
+        }
+    };
+}
+
+pub fn simple_fill_super(sb: &mut SuperBlock, magic: usize, vec: &Vec<tree_descr>) -> Result<()> {
+    let mut desc = tree_descr::default();
+    desc.name = c_str!("").as_char_ptr();
+
+    let rt = unsafe {
+        crate::bindings::simple_fill_super(
+            sb.to_c_super_block(),
+            magic as c_types::c_ulong,
+            vec.as_ptr(),
+        )
+    };
+    if rt != 0 {
+        return Err(Error::from_kernel_errno(rt));
+    }
+
+    Ok(())
+}
+
+pub type FSHandle = Box<file_system_type>;
 
 pub trait FileSystem: Sized + Sync {
     const MOUNT_TYPE: MountType;
@@ -215,16 +278,17 @@ pub trait FileSystem: Sized + Sync {
         Err(Error::EINVAL)
     }
 
-    fn fill_super(sb: &SuperBlock, data: &CStr, silent: i32) -> Result<()> {
+    fn fill_super(sb: &mut SuperBlock, data: &CStr, silent: i32) -> Result<()> {
         crate::pr_warn!("fill super");
         Err(Error::EINVAL)
     }
 
-    fn kill_sb(sb: &SuperBlock) {
+    fn kill_sb(sb: &SuperBlock) {}
 
-    }
-
-    fn register_self(name: &'static CStr, owner: &ThisModule) -> Result<FSHandle> where Self: Sized {
+    fn register_self(name: &'static CStr, owner: &ThisModule) -> Result<FSHandle>
+    where
+        Self: Sized,
+    {
         let mut c_fs_type = Box::new(file_system_type::default());
         c_fs_type.mount = Some(mount_callback::<Self>);
         c_fs_type.kill_sb = Some(kill_sb_callback::<Self>);
@@ -240,7 +304,7 @@ pub trait FileSystem: Sized + Sync {
     }
 
     fn unregister_self(c_fs_type: &mut FSHandle) -> Result<()> {
-        let err = unsafe{ unregister_filesystem(c_fs_type.as_mut() as *mut _) };
+        let err = unsafe { unregister_filesystem(c_fs_type.as_mut() as *mut _) };
         if err != 0 {
             return Err(Error::from_kernel_errno(err));
         }

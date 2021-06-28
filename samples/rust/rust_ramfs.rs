@@ -5,12 +5,17 @@
 #![no_std]
 #![feature(allocator_api, global_asm)]
 
-use kernel::prelude::*;
+use alloc::vec::Vec;
 use kernel::fs::*;
-use kernel::c_str;
-
-struct Ramfs {
-}
+use kernel::prelude::*;
+use kernel::str::CStr;
+use kernel::{c_str, treedescr};
+use kernel::{
+    file::File,
+    file_operations::{FileOpener, FileOperations},
+    io_buffer::{IoBufferReader, IoBufferWriter},
+    Error,
+};
 
 module! {
     type: Ramfs,
@@ -22,8 +27,53 @@ module! {
 
 static mut FS_HANDLE: Option<FSHandle> = None;
 
+struct Ramfs;
+struct Fops_A;
+struct Fops_B;
+
+impl FileOperations for Fops_A {
+    kernel::declare_file_operations!(read, write);
+
+    fn read<T: IoBufferWriter>(&self, _: &File, data: &mut T, offset: u64) -> Result<usize> {
+        // Succeed if the caller doesn't provide a buffer or if not at the start.
+        if data.is_empty() || offset != 0 {
+            return Ok(0);
+        }
+
+        // Write a one-byte 1 to the reader.
+        data.write_slice(&[1u8; 1])?;
+        Ok(1)
+    }
+}
+
+impl FileOperations for Fops_B {
+    kernel::declare_file_operations!(read, write);
+
+    fn read<T: IoBufferWriter>(&self, _: &File, data: &mut T, offset: u64) -> Result<usize> {
+        // Succeed if the caller doesn't provide a buffer or if not at the start.
+        if data.is_empty() || offset != 0 {
+            return Ok(0);
+        }
+
+        // Write a one-byte 1 to the reader.
+        data.write_slice(&[1u8; 1])?;
+        Ok(1)
+    }
+}
+
 impl FileSystem for Ramfs {
-    const MOUNT_TYPE: MountType = MountType::Custom;
+    const MOUNT_TYPE: MountType = MountType::Single;
+
+    fn fill_super(sb: &mut SuperBlock, data: &CStr, silent: i32) -> Result<()> {
+        let desc = treedescr!(
+            "fileA", Fops_A, 777;
+            "fileB", Fops_B, 655;
+        );
+
+        simple_fill_super(sb, 17, &desc)?;
+
+        Ok(())
+    }
 }
 
 impl KernelModule for Ramfs {
