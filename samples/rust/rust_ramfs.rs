@@ -5,6 +5,7 @@
 #![no_std]
 #![feature(allocator_api, global_asm)]
 
+use alloc::boxed::Box;
 use alloc::vec::Vec;
 use kernel::fs::*;
 use kernel::prelude::*;
@@ -28,35 +29,45 @@ module! {
 static mut FS_HANDLE: Option<FSHandle> = None;
 
 struct Ramfs;
-struct Fops_A;
-struct Fops_B;
 
-impl FileOperations for Fops_A {
-    kernel::declare_file_operations!(read, write);
+#[derive(Default)]
+struct FopsA;
+
+#[derive(Default)]
+struct FopsB;
+
+impl FileOperations for FopsA {
+    type Wrapper = Box<Self>;
+
+    kernel::declare_file_operations!(read);
 
     fn read<T: IoBufferWriter>(&self, _: &File, data: &mut T, offset: u64) -> Result<usize> {
         // Succeed if the caller doesn't provide a buffer or if not at the start.
         if data.is_empty() || offset != 0 {
             return Ok(0);
         }
+        pr_warn!("offset: {}", offset);
 
         // Write a one-byte 1 to the reader.
-        data.write_slice(&[1u8; 1])?;
-        Ok(1)
+        data.write_slice(b"This is file A\n")?;
+        Ok(b"This is file A\n".len())
     }
 }
 
-impl FileOperations for Fops_B {
-    kernel::declare_file_operations!(read, write);
+impl FileOperations for FopsB {
+    type Wrapper = Box<Self>;
+
+    kernel::declare_file_operations!(read);
 
     fn read<T: IoBufferWriter>(&self, _: &File, data: &mut T, offset: u64) -> Result<usize> {
         // Succeed if the caller doesn't provide a buffer or if not at the start.
-        if data.is_empty() || offset != 0 {
-            return Ok(0);
+        if data.is_empty() {
+            return Err(Error::EINVAL);
         }
+        pr_warn!("offset: {}", offset);
 
         // Write a one-byte 1 to the reader.
-        data.write_slice(&[1u8; 1])?;
+        data.write_slice(&['B' as u8; 1])?;
         Ok(1)
     }
 }
@@ -65,10 +76,10 @@ impl FileSystem for Ramfs {
     const MOUNT_TYPE: MountType = MountType::Single;
 
     fn fill_super(sb: &mut SuperBlock, data: &CStr, silent: i32) -> Result<()> {
-        let desc = treedescr!(
-            "fileA", Fops_A, 777;
-            "fileB", Fops_B, 655;
-        );
+        let desc = treedescr! {
+            "file_a", FopsA, S_IRUSR | S_IROTH;
+            "file_b", FopsB, S_IRUSR;
+        };
 
         simple_fill_super(sb, 17, &desc)?;
 

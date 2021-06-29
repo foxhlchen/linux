@@ -4,7 +4,7 @@
 
 use super::file_operations::{FileOpenAdapter, FileOpener, FileOperationsVtable};
 use crate::bindings::{
-    dentry, file_operations, file_system_type, inode, mount_bdev, mount_nodev, mount_single,
+    dentry, file, file_operations, file_system_type, inode, mount_bdev, mount_nodev, mount_single,
     register_filesystem, super_block, unregister_filesystem,
 };
 use crate::str::*;
@@ -12,6 +12,19 @@ use crate::{c_str, c_types, error::Error, Result, ThisModule};
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use core::ptr;
+
+pub const S_IRWXU: i32 = crate::bindings::S_IRWXU as i32;
+pub const S_IRUSR: i32 = crate::bindings::S_IRUSR as i32;
+pub const S_IWUSR: i32 = crate::bindings::S_IWUSR as i32;
+pub const S_IXUSR: i32 = crate::bindings::S_IXUSR as i32;
+pub const S_IRWXG: i32 = crate::bindings::S_IRWXG as i32;
+pub const S_IRGRP: i32 = crate::bindings::S_IRGRP as i32;
+pub const S_IWGRP: i32 = crate::bindings::S_IWGRP as i32;
+pub const S_IXGRP: i32 = crate::bindings::S_IXGRP as i32;
+pub const S_IRWXO: i32 = crate::bindings::S_IRWXO as i32;
+pub const S_IROTH: i32 = crate::bindings::S_IROTH as i32;
+pub const S_IWOTH: i32 = crate::bindings::S_IWOTH as i32;
+pub const S_IXOTH: i32 = crate::bindings::S_IXOTH as i32;
 
 unsafe extern "C" fn mount_callback<T: FileSystem>(
     fs_type: *mut file_system_type,
@@ -214,6 +227,14 @@ pub enum MountType {
 // export tree_descr
 pub use crate::bindings::tree_descr;
 
+impl<T: FileOpener<()>> FileOpenAdapter for T {
+    type Arg = ();
+
+    unsafe fn convert(_inode: *mut inode, _file: *mut file) -> *const Self::Arg {
+        &()
+    }
+}
+
 pub fn build_fops<A: FileOpenAdapter, T: FileOpener<A::Arg>>() -> &'static file_operations {
     return unsafe { FileOperationsVtable::<A, T>::build() };
 }
@@ -225,6 +246,12 @@ macro_rules! treedescr {
     ) => {
         {
             let mut v = Vec::<tree_descr>::new();
+
+            // Because the root inode is 1, the files array must not contain an
+	        // entry at index 1
+            v.push(tree_descr::default()); // index 0 skipped
+            v.push(tree_descr::default()); // index 1 skipped
+
             $(
                 let mut tdesc = tree_descr::default();
                 tdesc.name = c_str!($name).as_char_ptr();
@@ -232,7 +259,12 @@ macro_rules! treedescr {
                 tdesc.mode = $mode;
 
                 v.push(tdesc);
-            )*
+            )+
+
+            // Add ending mark
+            let mut tdesc = tree_descr::default();
+            tdesc.name = c_str!("").as_char_ptr();
+            v.push(tdesc);
 
             v
         }
@@ -244,16 +276,13 @@ macro_rules! treedescr {
             let mut tdesc = tree_descr::default();
             tdesc.name = c_str!("").as_char_ptr();
 
-            v.push(tdesc)
+            v.push(tdesc);
             v
         }
     };
 }
 
 pub fn simple_fill_super(sb: &mut SuperBlock, magic: usize, vec: &Vec<tree_descr>) -> Result<()> {
-    let mut desc = tree_descr::default();
-    desc.name = c_str!("").as_char_ptr();
-
     let rt = unsafe {
         crate::bindings::simple_fill_super(
             sb.to_c_super_block(),
