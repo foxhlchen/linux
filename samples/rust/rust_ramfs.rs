@@ -39,7 +39,7 @@ impl FileOperations for FopsA {
 
     kernel::declare_file_operations!(read);
 
-    fn read<T: IoBufferWriter>(&self, _: &File, data: &mut T, offset: u64) -> Result<usize> {
+    fn read<T: IoBufferWriter>(_this: &Self, _: &File, data: &mut T, offset: u64) -> Result<usize> {
         // Succeed if the caller doesn't provide a buffer or if not at the start.
         if data.is_empty() || offset != 0 {
             return Ok(0);
@@ -57,7 +57,7 @@ impl FileOperations for FopsB {
 
     kernel::declare_file_operations!(read);
 
-    fn read<T: IoBufferWriter>(&self, _: &File, data: &mut T, offset: u64) -> Result<usize> {
+    fn read<T: IoBufferWriter>(_this: &Self, _: &File, data: &mut T, offset: u64) -> Result<usize> {
         // Succeed if the caller doesn't provide a buffer or if not at the start.
         if data.is_empty() {
             return Err(Error::EINVAL);

@@ -127,7 +127,7 @@ pub fn module_misc_device(ts: TokenStream) -> TokenStream {
 }
 
 
-/// Declares a kernel module that implement a file system.
+/// Declares a kernel module that implements a file system.
 ///
 /// The `type` argument should be a type which implements the [`FileSystem`] trait.
 ///
