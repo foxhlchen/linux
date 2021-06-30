@@ -248,7 +248,7 @@ macro_rules! treedescr {
             let mut v = Vec::<tree_descr>::new();
 
             // Because the root inode is 1, the files array must not contain an
-	        // entry at index 1
+	        // entry at index 1. We make them start at index 2.
             v.push(tree_descr::default()); // index 0 skipped
             v.push(tree_descr::default()); // index 1 skipped
 

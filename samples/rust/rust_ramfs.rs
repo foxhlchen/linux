@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
 
-//! Rust printing macros sample
+//! Rust fs sample
 
 #![no_std]
 #![feature(allocator_api, global_asm)]
@@ -13,20 +13,18 @@ use kernel::str::CStr;
 use kernel::{c_str, treedescr};
 use kernel::{
     file::File,
-    file_operations::{FileOpener, FileOperations},
-    io_buffer::{IoBufferReader, IoBufferWriter},
+    file_operations::FileOperations,
+    io_buffer::IoBufferWriter,
     Error,
 };
 
-module! {
+module_fs! {
     type: Ramfs,
     name: b"rust_ramfs",
     author: b"Rust for Linux Contributors",
     description: b"Rust Ramfs",
     license: b"GPL v2",
 }
-
-static mut FS_HANDLE: Option<FSHandle> = None;
 
 struct Ramfs;
 
@@ -49,8 +47,8 @@ impl FileOperations for FopsA {
         pr_warn!("offset: {}", offset);
 
         // Write a one-byte 1 to the reader.
-        data.write_slice(b"This is file A\n")?;
-        Ok(b"This is file A\n".len())
+        data.write_slice(b"This is a test file.\n")?;
+        Ok(b"This is a test file.\n".len())
     }
 }
 
@@ -67,7 +65,7 @@ impl FileOperations for FopsB {
         pr_warn!("offset: {}", offset);
 
         // Write a one-byte 1 to the reader.
-        data.write_slice(&['B' as u8; 1])?;
+        data.write_slice(&['I' as u8; 1])?;
         Ok(1)
     }
 }
@@ -75,10 +73,10 @@ impl FileOperations for FopsB {
 impl FileSystem for Ramfs {
     const MOUNT_TYPE: MountType = MountType::Single;
 
-    fn fill_super(sb: &mut SuperBlock, data: &CStr, silent: i32) -> Result<()> {
+    fn fill_super(sb: &mut SuperBlock, _data: &CStr, _silent: i32) -> Result<()> {
         let desc = treedescr! {
-            "file_a", FopsA, S_IRUSR | S_IROTH;
-            "file_b", FopsB, S_IRUSR;
+            "testfile", FopsA, S_IRUSR | S_IROTH;
+            "infiniteI", FopsB, S_IRUSR;
         };
 
         simple_fill_super(sb, 17, &desc)?;
@@ -87,20 +85,3 @@ impl FileSystem for Ramfs {
     }
 }
 
-impl KernelModule for Ramfs {
-    fn init() -> Result<Self> {
-        unsafe { FS_HANDLE = Some(Ramfs::register_self(c_str!("rust_ramfs"), &THIS_MODULE)?) };
-        pr_warn!("register rust fs");
-        Ok(Self {})
-    }
-}
-
-impl Drop for Ramfs {
-    fn drop(&mut self) {
-        unsafe {
-            if let Some(fshd) = &mut FS_HANDLE {
-                Ramfs::unregister_self(fshd);
-            }
-        }
-    }
-}
