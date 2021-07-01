@@ -208,6 +208,10 @@ impl FSType {
 
         Ok(fs_type)
     }
+
+    pub fn to_c_fs_type(&mut self) -> *mut file_system_type {
+        self.c_fs_type
+    }
 }
 
 pub enum MountType {
@@ -302,17 +306,17 @@ pub type FSHandle = Box<file_system_type>;
 pub trait FileSystem: Sized + Sync {
     const MOUNT_TYPE: MountType;
 
-    fn mount(fs_type: &FSType, flags: i32, dev_name: &CStr, data: &CStr) -> Result<Dentry> {
+    fn mount(_fs_type: &FSType, _flags: i32, _dev_name: &CStr, _data: &CStr) -> Result<Dentry> {
         crate::pr_warn!("mount fs");
         Err(Error::EINVAL)
     }
 
-    fn fill_super(sb: &mut SuperBlock, data: &CStr, silent: i32) -> Result<()> {
+    fn fill_super(_sb: &mut SuperBlock, _data: &CStr, _silent: i32) -> Result<()> {
         crate::pr_warn!("fill super");
         Err(Error::EINVAL)
     }
 
-    fn kill_sb(sb: &SuperBlock) {}
+    fn kill_sb(_sb: &SuperBlock) {}
 
     fn register_self(name: &'static CStr, owner: &ThisModule) -> Result<FSHandle>
     where
