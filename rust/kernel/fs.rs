@@ -307,12 +307,10 @@ pub trait FileSystem: Sized + Sync {
     const MOUNT_TYPE: MountType;
 
     fn mount(_fs_type: &FSType, _flags: i32, _dev_name: &CStr, _data: &CStr) -> Result<Dentry> {
-        crate::pr_warn!("mount fs");
         Err(Error::EINVAL)
     }
 
     fn fill_super(_sb: &mut SuperBlock, _data: &CStr, _silent: i32) -> Result<()> {
-        crate::pr_warn!("fill super");
         Err(Error::EINVAL)
     }
 
