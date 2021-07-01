@@ -126,7 +126,6 @@ pub fn module_misc_device(ts: TokenStream) -> TokenStream {
     module::module_misc_device(ts)
 }
 
-
 /// Declares a kernel module that implements a file system.
 ///
 /// The `type` argument should be a type which implements the [`FileSystem`] trait.
@@ -140,13 +139,13 @@ pub fn module_misc_device(ts: TokenStream) -> TokenStream {
 /// ```ignore
 /// use kernel::prelude::*;
 ///
-///module! {
+/// module! {
 ///    type: MyFs,
 ///    name: b"my_fs",
 ///    author: b"Rust for Linux Contributors",
 ///    description: b"My very own fs",
 ///    license: b"GPL v2",
-///}
+/// }
 /// }
 ///
 /// #[derive(Default)]

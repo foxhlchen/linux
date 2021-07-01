@@ -11,12 +11,7 @@ use kernel::fs::*;
 use kernel::prelude::*;
 use kernel::str::CStr;
 use kernel::{c_str, treedescr};
-use kernel::{
-    file::File,
-    file_operations::FileOperations,
-    io_buffer::IoBufferWriter,
-    Error,
-};
+use kernel::{file::File, file_operations::FileOperations, io_buffer::IoBufferWriter, Error};
 
 module_fs! {
     type: Ramfs,
@@ -84,4 +79,3 @@ impl FileSystem for Ramfs {
         Ok(())
     }
 }
-

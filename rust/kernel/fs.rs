@@ -228,9 +228,6 @@ pub enum MountType {
     Single,
 }
 
-// export tree_descr
-pub use crate::bindings::tree_descr;
-
 impl<T: FileOpener<()>> FileOpenAdapter for T {
     type Arg = ();
 
@@ -242,6 +239,9 @@ impl<T: FileOpener<()>> FileOpenAdapter for T {
 pub fn build_fops<A: FileOpenAdapter, T: FileOpener<A::Arg>>() -> &'static file_operations {
     return unsafe { FileOperationsVtable::<A, T>::build() };
 }
+
+// export tree_descr
+pub use crate::bindings::tree_descr;
 
 #[macro_export]
 macro_rules! treedescr {
