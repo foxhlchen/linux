@@ -10,7 +10,6 @@ use crate::bindings::{
 use crate::str::*;
 use crate::{c_str, c_types, error::Error, Result, ThisModule};
 use alloc::boxed::Box;
-use alloc::vec::Vec;
 use core::ptr;
 
 pub const S_IRWXU: i32 = crate::bindings::S_IRWXU as i32;
@@ -128,7 +127,7 @@ impl Dentry {
     }
 
     pub fn to_c_dentry(&self) -> *mut dentry {
-        return self.c_dentry;
+        self.c_dentry
     }
 }
 
@@ -156,7 +155,7 @@ impl Inode {
     }
 
     pub fn to_c_inode(&self) -> *mut inode {
-        return self.c_inode;
+        self.c_inode
     }
 }
 
@@ -182,7 +181,7 @@ impl SuperBlock {
         Ok(sb)
     }
 
-    pub fn to_c_super_block(&mut self) -> *mut super_block {
+    pub fn to_c_super_block(&self) -> *mut super_block {
         self.c_sb
     }
 }
@@ -209,7 +208,7 @@ impl FSType {
         Ok(fs_type)
     }
 
-    pub fn to_c_fs_type(&mut self) -> *mut file_system_type {
+    pub fn to_c_fs_type(&self) -> *mut file_system_type {
         self.c_fs_type
     }
 }
@@ -286,7 +285,7 @@ macro_rules! treedescr {
     };
 }
 
-pub fn simple_fill_super(sb: &mut SuperBlock, magic: usize, vec: &Vec<tree_descr>) -> Result<()> {
+pub fn simple_fill_super(sb: &mut SuperBlock, magic: usize, vec: &[tree_descr]) -> Result<()> {
     let rt = unsafe {
         crate::bindings::simple_fill_super(
             sb.to_c_super_block(),

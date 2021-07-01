@@ -49,12 +49,12 @@ impl FileOperations for FopsB {
 
     kernel::declare_file_operations!(read);
 
-    fn read<T: IoBufferWriter>(_this: &Self, _: &File, data: &mut T, offset: u64) -> Result<usize> {
+    fn read<T: IoBufferWriter>(_this: &Self, _: &File, data: &mut T, _offset: u64) -> Result<usize> {
         if data.is_empty() {
             return Err(Error::EINVAL);
         }
 
-        data.write_slice(&['I' as u8; 1])?;
+        data.write_slice(&[b'I'; 1])?;
         Ok(1)
     }
 }
