@@ -252,8 +252,8 @@ macro_rules! treedescr {
 
             // Because the root inode is 1, the files array must not contain an
 	        // entry at index 1. We make them start at index 2.
-            v.push(tree_descr::default()); // index 0 skipped
-            v.push(tree_descr::default()); // index 1 skipped
+            v.try_push(tree_descr::default())?; // index 0 skipped
+            v.try_push(tree_descr::default())?; // index 1 skipped
 
             $(
                 let mut tdesc = tree_descr::default();
@@ -261,13 +261,13 @@ macro_rules! treedescr {
                 tdesc.ops = build_fops::<$ops, $ops>();
                 tdesc.mode = $mode;
 
-                v.push(tdesc);
+                v.try_push(tdesc)?;
             )+
 
             // Add ending mark
             let mut tdesc = tree_descr::default();
             tdesc.name = c_str!("").as_char_ptr();
-            v.push(tdesc);
+            v.try_push(tdesc)?;
 
             v
         }
@@ -279,7 +279,7 @@ macro_rules! treedescr {
             let mut tdesc = tree_descr::default();
             tdesc.name = c_str!("").as_char_ptr();
 
-            v.push(tdesc);
+            v.try_push(tdesc)?;
             v
         }
     };
@@ -319,7 +319,7 @@ pub trait FileSystem: Sized + Sync {
     where
         Self: Sized,
     {
-        let mut c_fs_type = Box::new(file_system_type::default());
+        let mut c_fs_type = Box::try_new(file_system_type::default())?;
         c_fs_type.mount = Some(mount_callback::<Self>);
         c_fs_type.kill_sb = Some(kill_sb_callback::<Self>);
         c_fs_type.owner = owner.0;
