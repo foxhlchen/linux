@@ -149,30 +149,30 @@ impl SuperBlock {
 }
 
 pub trait SuperBlockOps {
-    fn alloc_inode(sb: &SuperBlock) -> &Inode {}
+    // fn alloc_inode(sb: &SuperBlock) -> &Inode {}
 
-    fn destroy_inode(inode: &Inode) {}
+    // fn destroy_inode(inode: &Inode) {}
 
-    fn free_inode(inode: &Inode) {}
+    // fn free_inode(inode: &Inode) {}
 
-    fn dirty_inode(inode: &Inode, flags: i32) {}
+    // fn dirty_inode(inode: &Inode, flags: i32) {}
 
-    // fn write_inode(inode: &Inode, wbc: *mut writeback_control) -> Result {}
-    fn drop_inode(inode: &Inode) -> Result {}
+    // // fn write_inode(inode: &Inode, wbc: *mut writeback_control) -> Result {}
+    // fn drop_inode(inode: &Inode) -> Result {}
 
-    fn evict_inode(inode: &Inode) {}
+    // fn evict_inode(inode: &Inode) {}
 
-    fn put_super(sb: &SuperBlock) {}
+    // fn put_super(sb: &SuperBlock) {}
 
-    fn sync_fs(sb: &SuperBlock, wait: i32) -> Result {}
+    // fn sync_fs(sb: &SuperBlock, wait: i32) -> Result {}
 
-    fn freeze_super(arg1: &SuperBlock) -> Result {}
+    // fn freeze_super(arg1: &SuperBlock) -> Result {}
 
-    fn freeze_fs(arg1: &SuperBlock) -> Result {}
+    // fn freeze_fs(arg1: &SuperBlock) -> Result {}
 
-    fn thaw_super(arg1: &SuperBlock) -> Result {}
+    // fn thaw_super(arg1: &SuperBlock) -> Result {}
 
-    fn unfreeze_fs(arg1: &SuperBlock) -> Result {}
+    // fn unfreeze_fs(arg1: &SuperBlock) -> Result {}
 
     // fn statfs(arg1: &Dentry, arg2: *mut kstatfs) -> Result {}
 
