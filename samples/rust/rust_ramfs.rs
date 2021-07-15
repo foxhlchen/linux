@@ -49,7 +49,12 @@ impl FileOperations for FopsB {
 
     kernel::declare_file_operations!(read);
 
-    fn read<T: IoBufferWriter>(_this: &Self, _: &File, data: &mut T, _offset: u64) -> Result<usize> {
+    fn read<T: IoBufferWriter>(
+        _this: &Self,
+        _: &File,
+        data: &mut T,
+        _offset: u64,
+    ) -> Result<usize> {
         if data.is_empty() {
             return Err(Error::EINVAL);
         }
@@ -64,8 +69,8 @@ impl FileSystem for Ramfs {
 
     fn fill_super(sb: &mut SuperBlock, _data: &CStr, _silent: i32) -> Result<()> {
         let desc = treedescr! {
-            "testfile", FopsA, S_IRUSR | S_IROTH;
-            "infiniteI", FopsB, S_IRUSR;
+            "testfile", FopsA, 644;
+            "infiniteI", FopsB, 777;
         };
 
         simple_fill_super(sb, 17, &desc)?;

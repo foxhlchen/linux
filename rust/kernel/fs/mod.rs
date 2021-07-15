@@ -3,34 +3,31 @@
 //! File System Interfaces.
 
 use super::file_operations::{FileOpenAdapter, FileOpener, FileOperationsVtable};
+use crate::bindings;
 use crate::bindings::{
-    dentry, file, file_operations, file_system_type, inode, mount_bdev, mount_nodev, mount_single,
-    register_filesystem, super_block, unregister_filesystem,
+    file, file_operations, file_system_type, mount_bdev, mount_nodev, mount_single,
+    register_filesystem, unregister_filesystem,
 };
+
 use crate::str::*;
 use crate::{c_str, c_types, error::Error, Result, ThisModule};
 use alloc::boxed::Box;
 use core::ptr;
 
-pub const S_IRWXU: i32 = crate::bindings::S_IRWXU as i32;
-pub const S_IRUSR: i32 = crate::bindings::S_IRUSR as i32;
-pub const S_IWUSR: i32 = crate::bindings::S_IWUSR as i32;
-pub const S_IXUSR: i32 = crate::bindings::S_IXUSR as i32;
-pub const S_IRWXG: i32 = crate::bindings::S_IRWXG as i32;
-pub const S_IRGRP: i32 = crate::bindings::S_IRGRP as i32;
-pub const S_IWGRP: i32 = crate::bindings::S_IWGRP as i32;
-pub const S_IXGRP: i32 = crate::bindings::S_IXGRP as i32;
-pub const S_IRWXO: i32 = crate::bindings::S_IRWXO as i32;
-pub const S_IROTH: i32 = crate::bindings::S_IROTH as i32;
-pub const S_IWOTH: i32 = crate::bindings::S_IWOTH as i32;
-pub const S_IXOTH: i32 = crate::bindings::S_IXOTH as i32;
+pub use dentry::Dentry;
+pub use inode::Inode;
+pub use super_block::SuperBlock;
+
+pub mod dentry;
+pub mod inode;
+pub mod super_block;
 
 unsafe extern "C" fn mount_callback<T: FileSystem>(
     fs_type: *mut file_system_type,
     flags: c_types::c_int,
     dev_name: *const c_types::c_char,
     data: *mut c_types::c_void,
-) -> *mut dentry {
+) -> *mut bindings::dentry {
     let r_fs_type = FSType::from_c_fs_type(fs_type).unwrap();
     let r_dev_name = if dev_name.is_null() {
         c_str!("")
@@ -64,14 +61,14 @@ unsafe extern "C" fn mount_callback<T: FileSystem>(
 
     if let Err(e) = rt {
         //TODO wrap ETR_PTR
-        return e.to_kernel_errno() as *mut dentry;
+        return e.to_kernel_errno() as *mut bindings::dentry;
     }
 
     rt.unwrap().to_c_dentry()
 }
 
 unsafe extern "C" fn fill_super_callback<T: FileSystem>(
-    sb: *mut super_block,
+    sb: *mut bindings::super_block,
     data: *mut c_types::c_void,
     silent: c_types::c_int,
 ) -> c_types::c_int {
@@ -95,94 +92,11 @@ unsafe extern "C" fn fill_super_callback<T: FileSystem>(
     0
 }
 
-unsafe extern "C" fn kill_sb_callback<T: FileSystem>(sb: *mut super_block) {
+unsafe extern "C" fn kill_sb_callback<T: FileSystem>(sb: *mut bindings::super_block) {
     let r_sb_rs = SuperBlock::from_c_super_block(sb);
 
     if let Ok(r_sb) = r_sb_rs {
         T::kill_sb(&r_sb);
-    }
-}
-
-pub struct Dentry {
-    c_dentry: *mut dentry,
-}
-
-impl Dentry {
-    pub fn default() -> Dentry {
-        Dentry {
-            c_dentry: ptr::null_mut(),
-        }
-    }
-
-    pub fn from_c_dentry(c_dentry: *mut dentry) -> Result<Self> {
-        if c_dentry.is_null() {
-            return Err(Error::EINVAL);
-        }
-
-        //TODO inc refcnt, and dec in dtor
-        let mut d = Dentry::default();
-        d.c_dentry = c_dentry;
-
-        Ok(d)
-    }
-
-    pub fn to_c_dentry(&self) -> *mut dentry {
-        self.c_dentry
-    }
-}
-
-pub struct Inode {
-    c_inode: *mut inode,
-}
-
-impl Inode {
-    pub fn default() -> Inode {
-        Inode {
-            c_inode: ptr::null_mut(),
-        }
-    }
-
-    pub fn from_c_inode(c_inode: *mut inode) -> Result<Self> {
-        if c_inode.is_null() {
-            return Err(Error::EINVAL);
-        }
-
-        //TODO inc refcnt, and dec in dtor
-        let mut i = Inode::default();
-        i.c_inode = c_inode;
-
-        Ok(i)
-    }
-
-    pub fn to_c_inode(&self) -> *mut inode {
-        self.c_inode
-    }
-}
-
-pub struct SuperBlock {
-    c_sb: *mut super_block,
-}
-
-impl SuperBlock {
-    pub fn default() -> SuperBlock {
-        SuperBlock {
-            c_sb: ptr::null_mut(),
-        }
-    }
-
-    pub fn from_c_super_block(c_sb: *mut super_block) -> Result<Self> {
-        if c_sb.is_null() {
-            return Err(Error::EINVAL);
-        }
-
-        let mut sb = SuperBlock::default();
-        sb.c_sb = c_sb;
-
-        Ok(sb)
-    }
-
-    pub fn to_c_super_block(&self) -> *mut super_block {
-        self.c_sb
     }
 }
 
@@ -230,7 +144,7 @@ pub enum MountType {
 impl<T: FileOpener<()>> FileOpenAdapter for T {
     type Arg = ();
 
-    unsafe fn convert(_inode: *mut inode, _file: *mut file) -> *const Self::Arg {
+    unsafe fn convert(_inode: *mut bindings::inode, _file: *mut file) -> *const Self::Arg {
         &()
     }
 }
