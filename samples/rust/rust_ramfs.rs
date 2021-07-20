@@ -8,6 +8,7 @@
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use kernel::fs::*;
+use kernel::fs::super_block::SuperBlockOperations;
 use kernel::prelude::*;
 use kernel::str::CStr;
 use kernel::{c_str, treedescr};
@@ -22,6 +23,8 @@ module_fs! {
 }
 
 struct Ramfs;
+
+struct SuperOperations;
 
 #[derive(Default)]
 struct FopsA;
@@ -64,6 +67,10 @@ impl FileOperations for FopsB {
     }
 }
 
+impl SuperBlockOperations for SuperOperations {
+    kernel::declare_superblock_operations!();
+}
+
 impl FileSystem for Ramfs {
     const MOUNT_TYPE: MountType = MountType::Single;
 
@@ -74,6 +81,7 @@ impl FileSystem for Ramfs {
         };
 
         simple_fill_super(sb, 17, &desc)?;
+        sb.set_super_block_operations::<SuperOperations>();
 
         Ok(())
     }

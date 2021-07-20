@@ -319,6 +319,12 @@ impl SuperBlock {
     pub fn to_c_super_block(&self) -> *mut bindings::super_block {
         self.c_sb
     }
+
+    pub fn set_super_block_operations<T: SuperBlockOperations>(&self) {
+        unsafe {
+            (*self.c_sb).s_op = SuperBlockOperationsVtable::<T>::build();
+        }
+    }
 }
 
 pub trait SuperBlockOperations {
