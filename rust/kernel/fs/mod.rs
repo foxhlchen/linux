@@ -16,14 +16,14 @@ use core::ptr;
 
 pub use dentry::Dentry;
 pub use inode::Inode;
-pub use super_block::SuperBlock;
 pub use kstatfs::KStatFs;
+pub use super_block::SuperBlock;
 
 pub mod dentry;
 pub mod inode;
-pub mod super_block;
 pub mod kstatfs;
 pub mod seq_file;
+pub mod super_block;
 
 unsafe extern "C" fn mount_callback<T: FileSystem>(
     fs_type: *mut file_system_type,
@@ -218,16 +218,13 @@ pub fn simple_fill_super(sb: &mut SuperBlock, magic: usize, vec: &[tree_descr]) 
 }
 
 pub fn simple_statfs(dentry: &mut Dentry, kstatfs: &mut KStatFs) -> Result {
-    let rt = unsafe {
-        bindings::simple_statfs(dentry.to_c_dentry(), kstatfs.to_c_kstatfs())
-    };
+    let rt = unsafe { bindings::simple_statfs(dentry.to_c_dentry(), kstatfs.to_c_kstatfs()) };
     if rt != 0 {
         return Err(Error::from_kernel_errno(rt));
     }
 
     Ok(())
 }
-
 
 pub type FSHandle = Box<file_system_type>;
 

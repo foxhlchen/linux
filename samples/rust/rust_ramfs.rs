@@ -7,8 +7,9 @@
 
 use alloc::boxed::Box;
 use alloc::vec::Vec;
-use kernel::fs::*;
+use kernel::fs::dentry::DentryOperations;
 use kernel::fs::super_block::SuperBlockOperations;
+use kernel::fs::*;
 use kernel::prelude::*;
 use kernel::str::CStr;
 use kernel::{c_str, treedescr};
@@ -24,7 +25,11 @@ module_fs! {
 
 struct Ramfs;
 
+#[derive(Default)]
 struct SuperOperations;
+
+#[derive(Default)]
+struct DOperations;
 
 #[derive(Default)]
 struct FopsA;
@@ -71,6 +76,10 @@ impl SuperBlockOperations for SuperOperations {
     kernel::declare_superblock_operations!();
 }
 
+impl DentryOperations for DOperations {
+    kernel::declare_dentry_operations!();
+}
+
 impl FileSystem for Ramfs {
     const MOUNT_TYPE: MountType = MountType::Single;
 
@@ -81,7 +90,8 @@ impl FileSystem for Ramfs {
         };
 
         simple_fill_super(sb, 17, &desc)?;
-        sb.set_super_block_operations::<SuperOperations>();
+        sb.set_super_block_operations(&SuperOperations::default());
+        sb.set_dentry_operations(&DOperations::default());
 
         Ok(())
     }

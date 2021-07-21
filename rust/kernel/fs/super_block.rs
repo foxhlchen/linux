@@ -2,21 +2,25 @@
 
 //! SuperBlocks.
 
+use super::c_types;
 use crate::bindings;
 use crate::error::*;
-use core::ptr;
-use super::c_types;
 use crate::pr_warn;
 use core::marker;
+use core::ptr;
 
-use super::kstatfs::KStatFs;
 use super::dentry::Dentry;
-use super::seq_file::SeqFile;
+use super::dentry::DentryOperations;
+use super::dentry::DentryOperationsVtable;
 use super::inode::Inode;
+use super::kstatfs::KStatFs;
+use super::seq_file::SeqFile;
 
 // unsafe extern "C" fn alloc_inode<T: SuperBlockOperations>(sb: *mut bindings::super_block) -> *mut bindings::inode {}
 
-unsafe extern "C" fn destroy_inode_callback<T: SuperBlockOperations>(c_inode: *mut bindings::inode) {
+unsafe extern "C" fn destroy_inode_callback<T: SuperBlockOperations>(
+    c_inode: *mut bindings::inode,
+) {
     let inode_rs = Inode::from_c_inode(c_inode);
     if inode_rs.is_err() {
         pr_warn!("Invalid inode in destroy_inode");
@@ -46,8 +50,9 @@ unsafe extern "C" fn free_inode_callback<T: SuperBlockOperations>(c_inode: *mut 
 // ) -> c_types::c_int {
 // }
 
-
-unsafe extern "C" fn drop_inode_callback<T: SuperBlockOperations>(c_inode: *mut bindings::inode) -> c_types::c_int {
+unsafe extern "C" fn drop_inode_callback<T: SuperBlockOperations>(
+    c_inode: *mut bindings::inode,
+) -> c_types::c_int {
     let inode_rs = Inode::from_c_inode(c_inode);
     if let Err(e) = inode_rs {
         return e.to_kernel_errno();
@@ -199,8 +204,7 @@ unsafe extern "C" fn show_options_callback<T: SuperBlockOperations>(
 // ) -> c_types::c_long {
 // }
 
-
-pub(crate) struct SuperBlockOperationsVtable<T> (marker::PhantomData<T>);
+pub(crate) struct SuperBlockOperationsVtable<T>(marker::PhantomData<T>);
 
 impl<T: SuperBlockOperations> SuperBlockOperationsVtable<T> {
     const VTABLE: bindings::super_operations = bindings::super_operations {
@@ -320,7 +324,13 @@ impl SuperBlock {
         self.c_sb
     }
 
-    pub fn set_super_block_operations<T: SuperBlockOperations>(&self) {
+    pub fn set_dentry_operations<T: DentryOperations>(&self, _: &T) {
+        unsafe {
+            (*self.c_sb).s_d_op = DentryOperationsVtable::<T>::build();
+        }
+    }
+
+    pub fn set_super_block_operations<T: SuperBlockOperations>(&self, _: &T) {
         unsafe {
             (*self.c_sb).s_op = SuperBlockOperationsVtable::<T>::build();
         }
