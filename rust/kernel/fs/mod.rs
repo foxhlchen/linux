@@ -24,6 +24,8 @@ pub mod inode;
 pub mod kstatfs;
 pub mod seq_file;
 pub mod super_block;
+pub mod types;
+pub mod user_ns;
 
 unsafe extern "C" fn mount_callback<T: FileSystem>(
     fs_type: *mut file_system_type,
