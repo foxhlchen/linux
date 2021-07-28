@@ -12,17 +12,37 @@ use super::types::UMode;
 use super::user_ns::UserNameSpace;
 use crate::bindings;
 use crate::error::*;
-use core::ptr;
-use core::marker;
+use crate::pr_warn;
 use crate::str::*;
-
+use core::marker;
+use core::ptr;
 
 unsafe extern "C" fn lookup<T: InodeOperations>(
-    _arg1: *mut bindings::inode,
-    _arg2: *mut bindings::dentry,
-    _arg3: c_types::c_uint,
+    c_inode: *mut bindings::inode,
+    c_dentry: *mut bindings::dentry,
+    flags: c_types::c_uint,
 ) -> *mut bindings::dentry {
-    todo!()
+    let inode_rs = Inode::from_c_inode(c_inode);
+    if let Err(e) = inode_rs {
+        pr_warn!("Invalid inode in destroy_inode");
+        return e.to_kernel_errno() as _;
+    }
+
+    let dentry_rs = Dentry::from_c_dentry(c_dentry);
+    if let Err(e) = dentry_rs {
+        pr_warn!("Invalid inode in destroy_inode");
+        return e.to_kernel_errno() as _;
+    }
+
+    let mut inode = inode_rs.unwrap();
+    let mut dentry = dentry_rs.unwrap();
+
+    let rs = T::lookup(&mut inode, &mut dentry, flags as u32);
+    if let Err(e) = rs {
+        return e.to_kernel_errno() as _;
+    }
+
+    rs.unwrap().to_c_dentry()
 }
 
 // unsafe extern "C" fn get_link<T: InodeOperations>(
@@ -43,92 +63,345 @@ unsafe extern "C" fn lookup<T: InodeOperations>(
 // ) -> c_types::c_int {}
 
 unsafe extern "C" fn create<T: InodeOperations>(
-    _arg1: *mut bindings::user_namespace,
-    _arg2: *mut bindings::inode,
-    _arg3: *mut bindings::dentry,
-    _arg4: bindings::umode_t,
-    _arg5: bindings::bool_,
+    c_user_ns: *mut bindings::user_namespace,
+    c_inode: *mut bindings::inode,
+    c_dentry: *mut bindings::dentry,
+    c_mode: bindings::umode_t,
+    c_excl: bindings::bool_,
 ) -> c_types::c_int {
+    let user_ns_rs = UserNameSpace::from_c_user_namespace(c_user_ns);
+    if let Err(e) = user_ns_rs {
+        return e.to_kernel_errno();
+    }
+
+    let inode_rs = Inode::from_c_inode(c_inode);
+    if let Err(e) = inode_rs {
+        return e.to_kernel_errno();
+    }
+
+    let dentry_rs = Dentry::from_c_dentry(c_dentry);
+    if let Err(e) = dentry_rs {
+        return e.to_kernel_errno();
+    }
+
+    let mut user_ns = user_ns_rs.unwrap();
+    let mut inode = inode_rs.unwrap();
+    let mut dentry = dentry_rs.unwrap();
+    let mode = c_mode as UMode;
+    let excl = c_excl as bool;
+
+    let rs = T::create(&mut user_ns, &mut inode, &mut dentry, mode, excl);
+    if let Err(e) = rs {
+        return e.to_kernel_errno();
+    }
+
     0
 }
 
 unsafe extern "C" fn link<T: InodeOperations>(
-    _arg1: *mut bindings::dentry,
-    _arg2: *mut bindings::inode,
-    _arg3: *mut bindings::dentry,
+    c_old_dentry: *mut bindings::dentry,
+    c_dir: *mut bindings::inode,
+    c_dentry: *mut bindings::dentry,
 ) -> c_types::c_int {
+    let old_dentry_rs = Dentry::from_c_dentry(c_old_dentry);
+    if let Err(e) = old_dentry_rs {
+        return e.to_kernel_errno();
+    }
+
+    let dir_rs = Inode::from_c_inode(c_dir);
+    if let Err(e) = dir_rs {
+        return e.to_kernel_errno();
+    }
+
+    let dentry_rs = Dentry::from_c_dentry(c_dentry);
+    if let Err(e) = dentry_rs {
+        return e.to_kernel_errno();
+    }
+
+    let mut old_dentry = old_dentry_rs.unwrap();
+    let mut dir = dir_rs.unwrap();
+    let mut dentry = dentry_rs.unwrap();
+
+    let rs = T::link(&mut old_dentry, &mut dir, &mut dentry);
+    if let Err(e) = rs {
+        return e.to_kernel_errno();
+    }
+
     0
 }
 
 unsafe extern "C" fn unlink<T: InodeOperations>(
-    _arg1: *mut bindings::inode,
-    _arg2: *mut bindings::dentry,
+    c_inode: *mut bindings::inode,
+    c_dentry: *mut bindings::dentry,
 ) -> c_types::c_int {
+    let inode_rs = Inode::from_c_inode(c_inode);
+    if let Err(e) = inode_rs {
+        return e.to_kernel_errno();
+    }
+
+    let dentry_rs = Dentry::from_c_dentry(c_dentry);
+    if let Err(e) = dentry_rs {
+        return e.to_kernel_errno();
+    }
+
+    let mut inode = inode_rs.unwrap();
+    let mut dentry = dentry_rs.unwrap();
+
+    let rs = T::unlink(&mut inode, &mut dentry);
+    if let Err(e) = rs {
+        return e.to_kernel_errno();
+    }
+
     0
 }
 
 unsafe extern "C" fn symlink<T: InodeOperations>(
-    _arg1: *mut bindings::user_namespace,
-    _arg2: *mut bindings::inode,
-    _arg3: *mut bindings::dentry,
-    _arg4: *const c_types::c_char,
+    c_user_ns: *mut bindings::user_namespace,
+    c_inode: *mut bindings::inode,
+    c_dentry: *mut bindings::dentry,
+    c_symname: *const c_types::c_char,
 ) -> c_types::c_int {
+    let user_ns_rs = UserNameSpace::from_c_user_namespace(c_user_ns);
+    if let Err(e) = user_ns_rs {
+        return e.to_kernel_errno();
+    }
+
+    let inode_rs = Inode::from_c_inode(c_inode);
+    if let Err(e) = inode_rs {
+        return e.to_kernel_errno();
+    }
+
+    let dentry_rs = Dentry::from_c_dentry(c_dentry);
+    if let Err(e) = dentry_rs {
+        return e.to_kernel_errno();
+    }
+
+    let mut user_ns = user_ns_rs.unwrap();
+    let mut inode = inode_rs.unwrap();
+    let mut dentry = dentry_rs.unwrap();
+    let sym_name = unsafe { CStr::from_char_ptr(c_symname) };
+
+    let rs = T::symlink(&mut user_ns, &mut inode, &mut dentry, sym_name);
+    if let Err(e) = rs {
+        return e.to_kernel_errno();
+    }
+
     0
 }
 
 unsafe extern "C" fn mkdir<T: InodeOperations>(
-    _arg1: *mut bindings::user_namespace,
-    _arg2: *mut bindings::inode,
-    _arg3: *mut bindings::dentry,
-    _arg4: bindings::umode_t,
+    c_user_ns: *mut bindings::user_namespace,
+    c_inode: *mut bindings::inode,
+    c_dentry: *mut bindings::dentry,
+    c_mode: bindings::umode_t,
 ) -> c_types::c_int {
+    let user_ns_rs = UserNameSpace::from_c_user_namespace(c_user_ns);
+    if let Err(e) = user_ns_rs {
+        return e.to_kernel_errno();
+    }
+
+    let inode_rs = Inode::from_c_inode(c_inode);
+    if let Err(e) = inode_rs {
+        return e.to_kernel_errno();
+    }
+
+    let dentry_rs = Dentry::from_c_dentry(c_dentry);
+    if let Err(e) = dentry_rs {
+        return e.to_kernel_errno();
+    }
+
+    let mut user_ns = user_ns_rs.unwrap();
+    let mut inode = inode_rs.unwrap();
+    let mut dentry = dentry_rs.unwrap();
+    let mode = c_mode as UMode;
+
+    let rs = T::mkdir(&mut user_ns, &mut inode, &mut dentry, mode);
+    if let Err(e) = rs {
+        return e.to_kernel_errno();
+    }
+
     0
 }
 
 unsafe extern "C" fn rmdir<T: InodeOperations>(
-    _arg1: *mut bindings::inode,
-    _arg2: *mut bindings::dentry,
+    c_inode: *mut bindings::inode,
+    c_dentry: *mut bindings::dentry,
 ) -> c_types::c_int {
-    todo!()
+    let inode_rs = Inode::from_c_inode(c_inode);
+    if let Err(e) = inode_rs {
+        return e.to_kernel_errno();
+    }
+
+    let dentry_rs = Dentry::from_c_dentry(c_dentry);
+    if let Err(e) = dentry_rs {
+        return e.to_kernel_errno();
+    }
+
+    let mut inode = inode_rs.unwrap();
+    let mut dentry = dentry_rs.unwrap();
+
+    let rs = T::rmdir(&mut inode, &mut dentry);
+    if let Err(e) = rs {
+        return e.to_kernel_errno();
+    }
+
+    0
 }
 
 unsafe extern "C" fn mknod<T: InodeOperations>(
-    _arg1: *mut bindings::user_namespace,
-    _arg2: *mut bindings::inode,
-    _arg3: *mut bindings::dentry,
-    _arg4: bindings::umode_t,
-    _arg5: bindings::dev_t,
+    c_user_ns: *mut bindings::user_namespace,
+    c_inode: *mut bindings::inode,
+    c_dentry: *mut bindings::dentry,
+    c_mode: bindings::umode_t,
+    c_rdev: bindings::dev_t,
 ) -> c_types::c_int {
-    todo!()
+    let user_ns_rs = UserNameSpace::from_c_user_namespace(c_user_ns);
+    if let Err(e) = user_ns_rs {
+        return e.to_kernel_errno();
+    }
+
+    let inode_rs = Inode::from_c_inode(c_inode);
+    if let Err(e) = inode_rs {
+        return e.to_kernel_errno();
+    }
+
+    let dentry_rs = Dentry::from_c_dentry(c_dentry);
+    if let Err(e) = dentry_rs {
+        return e.to_kernel_errno();
+    }
+
+    let mut user_ns = user_ns_rs.unwrap();
+    let mut inode = inode_rs.unwrap();
+    let mut dentry = dentry_rs.unwrap();
+    let mode = c_mode as UMode;
+    let rdev = c_rdev as DevType;
+
+    let rs = T::mknod(&mut user_ns, &mut inode, &mut dentry, mode, rdev);
+    if let Err(e) = rs {
+        return e.to_kernel_errno();
+    }
+
+    0
 }
 
 unsafe extern "C" fn rename<T: InodeOperations>(
-    _arg1: *mut bindings::user_namespace,
-    _arg2: *mut bindings::inode,
-    _arg3: *mut bindings::dentry,
-    _arg4: *mut bindings::inode,
-    _arg5: *mut bindings::dentry,
-    _arg6: c_types::c_uint,
+    c_user_ns: *mut bindings::user_namespace,
+    c_old_dir: *mut bindings::inode,
+    c_old_dentry: *mut bindings::dentry,
+    c_new_dir: *mut bindings::inode,
+    c_new_dentry: *mut bindings::dentry,
+    c_flags: c_types::c_uint,
 ) -> c_types::c_int {
-    todo!()
+    let user_ns_rs = UserNameSpace::from_c_user_namespace(c_user_ns);
+    if let Err(e) = user_ns_rs {
+        return e.to_kernel_errno();
+    }
+
+    let old_dir_rs = Inode::from_c_inode(c_old_dir);
+    if let Err(e) = old_dir_rs {
+        return e.to_kernel_errno();
+    }
+
+    let old_dentry_rs = Dentry::from_c_dentry(c_old_dentry);
+    if let Err(e) = old_dentry_rs {
+        return e.to_kernel_errno();
+    }
+
+    let new_dir_rs = Inode::from_c_inode(c_new_dir);
+    if let Err(e) = new_dir_rs {
+        return e.to_kernel_errno();
+    }
+
+    let new_dentry_rs = Dentry::from_c_dentry(c_new_dentry);
+    if let Err(e) = new_dentry_rs {
+        return e.to_kernel_errno();
+    }
+
+    let mut user_ns = user_ns_rs.unwrap();
+    let mut old_dir = old_dir_rs.unwrap();
+    let mut old_dentry = old_dentry_rs.unwrap();
+    let mut new_dir = new_dir_rs.unwrap();
+    let mut new_dentry = new_dentry_rs.unwrap();
+    let flags = c_flags as u32;
+
+    let rs = T::rename(
+        &mut user_ns,
+        &mut old_dir,
+        &mut old_dentry,
+        &mut new_dir,
+        &mut new_dentry,
+        flags,
+    );
+    if let Err(e) = rs {
+        return e.to_kernel_errno();
+    }
+
+    0
 }
 
 unsafe extern "C" fn setattr<T: InodeOperations>(
-    _arg1: *mut bindings::user_namespace,
-    _arg2: *mut bindings::dentry,
-    _arg3: *mut bindings::iattr,
+    c_user_ns: *mut bindings::user_namespace,
+    c_dentry: *mut bindings::dentry,
+    c_attr: *mut bindings::iattr,
 ) -> c_types::c_int {
-    todo!()
+    let user_ns_rs = UserNameSpace::from_c_user_namespace(c_user_ns);
+    if let Err(e) = user_ns_rs {
+        return e.to_kernel_errno();
+    }
+
+    let dentry_rs = Dentry::from_c_dentry(c_dentry);
+    if let Err(e) = dentry_rs {
+        return e.to_kernel_errno();
+    }
+
+    if c_attr.is_null() {
+        return Error::EINVAL.to_kernel_errno();
+    }
+
+    let mut user_ns = user_ns_rs.unwrap();
+    let mut dentry = dentry_rs.unwrap();
+    let mut attr = unsafe { *c_attr };
+
+    let rs = T::setattr(&mut user_ns, &mut dentry, &mut attr);
+    if let Err(e) = rs {
+        return e.to_kernel_errno();
+    }
+
+    0
 }
 
 unsafe extern "C" fn getattr<T: InodeOperations>(
-    _arg1: *mut bindings::user_namespace,
-    _arg2: *const bindings::path,
-    _arg3: *mut bindings::kstat,
-    _arg4: bindings::u32_,
-    _arg5: c_types::c_uint,
+    c_user_ns: *mut bindings::user_namespace,
+    c_path: *const bindings::path,
+    c_kstat: *mut bindings::kstat,
+    c_request_mask: bindings::u32_,
+    c_query_flags: c_types::c_uint,
 ) -> c_types::c_int {
-    todo!()
+    let user_ns_rs = UserNameSpace::from_c_user_namespace(c_user_ns);
+    if let Err(e) = user_ns_rs {
+        return e.to_kernel_errno();
+    }
+
+    if c_path.is_null() {
+        return Error::EINVAL.to_kernel_errno();
+    }
+
+    if c_kstat.is_null() {
+        return Error::EINVAL.to_kernel_errno();
+    }
+
+    let mut user_ns = user_ns_rs.unwrap();
+    let path = unsafe { *c_path };
+    let mut kstat = unsafe { *c_kstat };
+    let request_mask = c_request_mask as u32;
+    let query_flags = c_query_flags as u32;
+
+    let rs = T::getattr(&mut user_ns, &path, &mut kstat, request_mask, query_flags);
+    if let Err(e) = rs {
+        return e.to_kernel_errno();
+    }
+
+    0
 }
 
 // unsafe extern "C" fn listxattr<T: InodeOperations>(arg1: *mut dentry, arg2: *mut c_types::c_char, arg3: usize) -> isize {}
@@ -325,6 +598,7 @@ pub trait InodeOperations {
     //         arg3: c_types::c_int,
     //     ) -> c_types::c_int {}
 
+    // fill inode to dentry
     fn create(
         _mnt_userns: &mut UserNameSpace,
         _inode: &mut Inode,
@@ -386,7 +660,11 @@ pub trait InodeOperations {
         Err(Error::EINVAL)
     }
 
-    fn setattr(_mnt_userns: &mut UserNameSpace, _dentry: &mut Dentry, _iattr: &mut IAttr) -> Result {
+    fn setattr(
+        _mnt_userns: &mut UserNameSpace,
+        _dentry: &mut Dentry,
+        _iattr: &mut IAttr,
+    ) -> Result {
         Err(Error::EINVAL)
     }
 

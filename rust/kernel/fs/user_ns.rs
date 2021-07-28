@@ -3,8 +3,8 @@
 //! UserNameSpace.
 
 use crate::bindings;
-use core::ptr;
 use crate::error::*;
+use core::ptr;
 
 pub struct UserNameSpace {
     c_user_ns: *mut bindings::user_namespace,
