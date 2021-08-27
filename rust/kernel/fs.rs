@@ -30,7 +30,52 @@ macro_rules! declare_c_vtable {
     };
 }
 
+pub struct Registration<T: FileSystemBase> {
+    phantom: PhantomData<T>,
+    fs_type: FileSystemType,
+}
+
+//Pin self
+impl Registration<T: FileSystemBase> {
+
+    fn new(fs_type: FileSystemType ) -> Self {
+        Self {
+            PhantomData,
+            fs_type
+        }
+    }
+
+    fn new_pinned() -> Result<Pin<Box<Self>>> {
+        let mut c_fs_type = file_system_type::default();
+        c_fs_type.mount = Some(mount_callback::<Self>);
+        c_fs_type.kill_sb = Some(kill_superblock_callback::<Self>);
+        c_fs_type.owner = T::OWNER;
+        c_fs_type.name = T::NAME.as_char_ptr();
+        
+        Ok(Pin::from(Box::try_new(Self::new(c_fs_type))?))
+    }
+
+    fn register(&self) -> Result {
+        let err = unsafe { register_filesystem(self.get_mut().fs_type as *mut _) };
+        if err != 0 {
+            return Err(Error::from_kernel_errno(err));
+        }
+
+        Ok(())
+    }
+
+    fn unregister() -> Result {
+        let err = unsafe { unregister_filesystem(self.get_mut() as *mut _) };
+        if err != 0 {
+            return Err(Error::from_kernel_errno(err));
+        }
+
+        Ok(())
+    }
+}
+
 pub type FileSystemType = bindings::file_system_type;
+pub type PinnedFSType = Pin<Box<FileSystemType>>
 
 pub trait FileSystemBase {
     type MountOptions = c_void;
